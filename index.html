@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WiFi Vault — Live</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:20px}
+  h1{color:#58a6ff;text-align:center}
+  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;
+        padding:16px;margin:12px auto;max-width:480px}
+  .card h3{margin:0 0 8px;color:#58a6ff;word-break:break-all}
+  .pass{font-size:20px;color:#3fb950;font-family:monospace;user-select:all}
+  .meta{font-size:12px;color:#8b949e;margin-top:8px}
+  .empty{text-align:center;color:#8b949e;margin-top:60px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;
+       background:#3fb950;margin-right:6px;animation:p 1.5s infinite}
+  @keyframes p{50%{opacity:.3}}
+  button{background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;
+         padding:6px 12px;cursor:pointer;margin-top:8px}
+</style>
+</head>
+<body>
+<h1><span class="dot"></span>WiFi Vault — Live</h1>
+<div id="count" style="text-align:center;color:#8b949e;margin-bottom:10px"></div>
+<div id="list"><p class="empty">Data එනකම් ඉන්න...</p></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, remove }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDIaT4VD2rzaGqsDv_RxGm_IYnX4OiJeXA",
+  authDomain: "bloodlegen-5e51c.firebaseapp.com",
+  databaseURL: "https://bloodlegen-5e51c-default-rtdb.firebaseio.com",
+  projectId: "bloodlegen-5e51c",
+  storageBucket: "bloodlegen-5e51c.firebasestorage.app",
+  messagingSenderId: "130652097903",
+  appId: "1:130652097903:web:e6fbbca95927cbe5486c9a",
+  measurementId: "G-1Y2V69S719"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+onValue(ref(db, "wifi"), snap => {
+  const data = snap.val();
+  const list = document.getElementById("list");
+  if (!data) {
+    list.innerHTML = '<p class="empty">Data නෑ — Termux script එකෙන් push කරන්න</p>';
+    document.getElementById("count").textContent = "";
+    return;
+  }
+  const entries = Object.entries(data);
+  document.getElementById("count").textContent = `Total: ${entries.length} networks`;
+  list.innerHTML = "";
+  entries.forEach(([key, n]) => {
+    list.innerHTML += `
+      <div class="card">
+        <h3>📶 ${n.ssid}</h3>
+        <div class="pass">🔑 ${n.password}</div>
+        <div class="meta">type: ${n.type || "-"} |
+          ${n.time ? "updated: " + new Date(n.time).toLocaleString() : ""}</div>
+        <button onclick="del('${key}')">Delete</button>
+      </div>`;
+  });
+});
+
+window.del = key => remove(ref(db, "wifi/" + key));
+</script>
+</body>
+</html>

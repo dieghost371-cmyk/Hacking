@@ -2,73 +2,116 @@
 <html lang="si">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WiFi Vault — Live</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WiFiAuditor - Security Testing Dashboard</title>
 <style>
-  *{box-sizing:border-box}
-  body{font-family:sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:20px}
-  h1{color:#58a6ff;text-align:center}
-  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;
-        padding:16px;margin:12px auto;max-width:480px}
-  .card h3{margin:0 0 8px;color:#58a6ff;word-break:break-all}
-  .pass{font-size:20px;color:#3fb950;font-family:monospace;user-select:all}
-  .meta{font-size:12px;color:#8b949e;margin-top:8px}
-  .empty{text-align:center;color:#8b949e;margin-top:60px}
-  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;
-       background:#3fb950;margin-right:6px;animation:p 1.5s infinite}
-  @keyframes p{50%{opacity:.3}}
-  button{background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:6px;
-         padding:6px 12px;cursor:pointer;margin-top:8px}
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#0a0e14; color:#c9d1d9; font-family:'Segoe UI',monospace; }
+  .header { background:#11161f; padding:15px 25px; border-bottom:2px solid #d29922;
+            display:flex; justify-content:space-between; align-items:center; }
+  .header h1 { color:#d29922; font-size:1.4em; }
+  .header .status { color:#3fb950; font-size:0.85em; }
+  .container { display:grid; grid-template-columns:1fr 1fr; gap:15px; padding:20px; }
+  .panel { background:#11161f; border:1px solid #21262d; border-radius:8px; padding:15px; }
+  .panel h2 { color:#58a6ff; font-size:1em; margin-bottom:10px; border-bottom:1px solid #21262d; padding-bottom:5px; }
+  table { width:100%; border-collapse:collapse; font-size:0.85em; }
+  th,td { padding:6px 8px; text-align:left; border-bottom:1px solid #21262d; }
+  th { color:#8b949e; }
+  tr:hover { background:#161b22; cursor:pointer; }
+  tr.selected { background:#1f6feb33; }
+  .btn { background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:8px 14px;
+         border-radius:6px; cursor:pointer; margin:3px; font-size:0.85em; }
+  .btn:hover { background:#30363d; }
+  .btn.attack { border-color:#f85149; color:#f85149; }
+  .btn.attack:hover { background:#f8514922; }
+  .btn.go { border-color:#3fb950; color:#3fb950; }
+  #console { background:#0d1117; height:200px; overflow-y:auto; font-size:0.8em;
+             padding:10px; border:1px solid #21262d; border-radius:6px; }
+  #console div { margin-bottom:3px; }
+  .info { color:#58a6ff; } .ok { color:#3fb950; } .warn { color:#d29922; } .err { color:#f85149; }
+  input,select { background:#0d1117; color:#c9d1d9; border:1px solid #30363d;
+                 padding:8px; border-radius:6px; width:100%; margin:3px 0; }
+  .full { grid-column:1/-1; }
+  .signal { width:50px; height:8px; background:#21262d; border-radius:4px; overflow:hidden; }
+  .signal div { height:100%; background:#3fb950; }
 </style>
 </head>
 <body>
-<h1><span class="dot"></span>WiFi Vault — Live</h1>
-<div id="count" style="text-align:center;color:#8b949e;margin-bottom:10px"></div>
-<div id="list"><p class="empty">Data එනකම් ඉන්න...</p></div>
+<div class="header">
+  <h1>📡 WiFiAuditor</h1>
+  <span class="status" id="monStatus">● Monitor mode: OFFLINE (demo)</span>
+</div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, remove }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+<div class="container">
+  <div class="panel full">
+    <h2>Interface Control</h2>
+    <select id="iface">
+      <option>wlan0mon (demo)</option><option>wlan0</option><option>wlan1</option>
+    </select>
+    <button class="btn go" onclick="startMonitor()">Start Monitor Mode</button>
+    <button class="btn" onclick="stopMonitor()">Stop Monitor Mode</button>
+    <button class="btn" onclick="startScan()">Scan Networks</button>
+  </div>
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDIaT4VD2rzaGqsDv_RxGm_IYnX4OiJeXA",
-  authDomain: "bloodlegen-5e51c.firebaseapp.com",
-  databaseURL: "https://bloodlegen-5e51c-default-rtdb.firebaseio.com",
-  projectId: "bloodlegen-5e51c",
-  storageBucket: "bloodlegen-5e51c.firebasestorage.app",
-  messagingSenderId: "130652097903",
-  appId: "1:130652097903:web:e6fbbca95927cbe5486c9a",
-  measurementId: "G-1Y2V69S719"
-};
+  <div class="panel full">
+    <h2>Detected Networks</h2>
+    <table id="netTable">
+      <tr><th>#</th><th>SSID</th><th>BSSID</th><th>CH</th><th>Enc</th><th>Signal</th></tr>
+    </table>
+  </div>
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+  <div class="panel">
+    <h2>Attack Module</h2>
+    <div style="font-size:0.85em;color:#8b949e">Selected target:
+      <span id="target" class="warn">none</span></div>
+    <select id="attackType">
+      <option value="handshake">Handshake Capture (WPA/WPA2)</option>
+      <option value="pmkid">PMKID Capture (clientless)</option>
+      <option value="deauth">Deauth Flood (5 pkts)</option>
+      <option value="wps">WPS Pixie Dust</option>
+    </select>
+    <button class="btn attack" onclick="runAttack()">▶ Execute</button>
+    <button class="btn" onclick="stopAttack()">■ Stop</button>
+  </div>
 
-onValue(ref(db, "wifi"), snap => {
-  const data = snap.val();
-  const list = document.getElementById("list");
-  if (!data) {
-    list.innerHTML = '<p class="empty">Data නෑ — Termux script එකෙන් push කරන්න</p>';
-    document.getElementById("count").textContent = "";
-    return;
-  }
-  const entries = Object.entries(data);
-  document.getElementById("count").textContent = `Total: ${entries.length} networks`;
-  list.innerHTML = "";
-  entries.forEach(([key, n]) => {
-    list.innerHTML += `
-      <div class="card">
-        <h3>📶 ${n.ssid}</h3>
-        <div class="pass">🔑 ${n.password}</div>
-        <div class="meta">type: ${n.type || "-"} |
-          ${n.time ? "updated: " + new Date(n.time).toLocaleString() : ""}</div>
-        <button onclick="del('${key}')">Delete</button>
-      </div>`;
-  });
-});
+  <div class="panel">
+    <h2>Crack Module</h2>
+    <input type="file" id="capfile" accept=".cap,.pcap,.pcapng">
+    <input type="text" id="wordlist" placeholder="/usr/share/wordlists/rockyou.txt"
+           value="/usr/share/wordlists/rockyou.txt">
+    <button class="btn go" onclick="crack()">🔑 Crack Handshake</button>
+  </div>
 
-window.del = key => remove(ref(db, "wifi/" + key));
-</script>
-</body>
-</html>
+  <div class="panel full">
+    <h2>Console</h2>
+    <div id="console"></div>
+  </div>
+</div>
+
+<script>
+let nets = [], selected = null, attackProc = null;
+
+// Demo scan data (replace with backend API fetch in real deployment)
+const demoNets = [
+  {ssid:"Lab-Router_5G", bssid:"AA:BB:CC:11:22:33", ch:6, enc:"WPA2-PSK", sig:88},
+  {ssid:"TestNet",       bssid:"AA:BB:CC:44:55:66", ch:11, enc:"WPA2-PSK", sig:72},
+  {ssid:"IoT-Devices",   bssid:"AA:BB:CC:77:88:99", ch:1, enc:"WPA2", sig:54},
+  {ssid:"OpenNet-Guest", bssid:"AA:BB:CC:AA:BB:CC", ch:3, enc:"Open", sig:65},
+];
+
+function log(msg, cls="info") {
+  const c = document.getElementById("console");
+  const d = document.createElement("div");
+  d.className = cls;
+  d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  c.appendChild(d); c.scrollTop = c.scrollHeight;
+}
+
+function startMonitor() {
+  document.getElementById("monStatus").textContent = "● Monitor mode: ACTIVE";
+  log(`airmon-ng start ${iface()}`, "ok");
+  log("Monitor mode enabled - killing conflicting processes", "info");
+}
+
+function stopMonitor() {
+  document.getElementById("monStatus").textContent = "● Monitor mode: OFFLINE";
